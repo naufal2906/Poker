@@ -1,290 +1,324 @@
-let heroHand = [null, null];
-let boardCards = [null, null, null, null, null];
-let activeSlot = null;
-let selectedRange = new Set();
+// State Aplikasi
 let opponentsCount = 8;
-let simulationWorker = null;
+let heroHand = [null, null]; // [slot0, slot1]
+let boardCards = [null, null, null, null, null]; // [flop1, flop2, flop3, turn, river]
+let selectedRange = new Set(); // Menyimpan hand dari matriks (contoh: 'AA', 'AKs')
+let activeSlot = null; // Menyimpan slot mana yang sedang diisi kartu ({type: 'hero'|'board', index: number})
 
-const RANKS = ['A', 'K', 'Q', 'J', '10', '9', '8', '7', '6', '5', '4', '3', '2'];
+// Evaluator Data untuk Matriks 13x13
+const RANKS = ['A', 'K', 'Q', 'J', 'T', '9', '8', '7', '6', '5', '4', '3', '2'];
 const SUITS = [
-  { symbol: '♠', color: 'black' },
-  { symbol: '♥', color: 'red' },
-  { symbol: '♦', color: 'red' },
-  { symbol: '♣', color: 'black' }
+  { symbol: '♠', class: 'black' },
+  { symbol: '♥', class: 'red' },
+  { symbol: '♦', class: 'red' },
+  { symbol: '♣', class: 'black' }
 ];
 
-const PRESETS = {
-  top5: ['AA', 'KK', 'QQ', 'JJ', 'AKs'],
-  top10: ['AA', 'KK', 'QQ', 'JJ', 'TT', '99', 'AKs', 'AQs', 'AJs', 'AKo'],
-  top20: ['AA', 'KK', 'QQ', 'JJ', 'TT', '99', '88', '77', 'AKs', 'AQs', 'AJs', 'ATs', 'KQs', 'KJs', 'AKo', 'AQo'],
-  top50: [
-    'AA', 'KK', 'QQ', 'JJ', 'TT', '99', '88', '77', '66', '55',
-    'AKs', 'AQs', 'AJs', 'ATs', 'A9s', 'A8s', 'A7s', 'A6s', 'A5s', 'A4s', 'A3s', 'A2s',
-    'KQs', 'KJs', 'KTs', 'K9s', 'QJs', 'QTs', 'JTs', 'T9s', '98s', '87s', '76s', '65s',
-    'AKo', 'AQo', 'AJo', 'ATo', 'KQo', 'KJo', 'QJo'
-  ]
-};
+// 1. Inisialisasi Matriks 13x13 Range
+function initRangeGrid() {
+  const gridContainer = document.getElementById('range-grid');
+  if (!gridContainer) return;
+  gridContainer.innerHTML = '';
 
-document.addEventListener('DOMContentLoaded', () => {
-  generateRangeGrid();
-  generateCardPicker();
-  setupEventListeners();
-  selectPreset('100');
-});
+  for (let i = 0; i < 13; i++) {
+    for (let j = 0; j < 13; j++) {
+      let cellText = '';
+      let cellClass = 'range-cell';
 
-function generateRangeGrid() {
-  const grid = document.getElementById('range-grid');
-  if (!grid) return;
-  grid.innerHTML = '';
-
-  for (let r = 0; r < 13; r++) {
-    for (let c = 0; c < 13; c++) {
-      let r1 = RANKS[r], r2 = RANKS[c];
-      let code = (r === c) ? `${r1}${r2}` : (r < c) ? `${r1}${r2}s` : `${r2}${r1}o`;
-      let type = (r === c) ? 'pair' : (r < c) ? 'suited' : 'offsuited';
+      if (i === j) {
+        cellText = RANKS[i] + RANKS[j];
+        cellClass += ' pair';
+      } else if (i < j) {
+        cellText = RANKS[i] + RANKS[j] + 's';
+        cellClass += ' suited';
+      } else {
+        cellText = RANKS[j] + RANKS[i] + 'o';
+        cellClass += ' offsuit';
+      }
 
       const cell = document.createElement('div');
-      cell.className = `range-cell ${type}`;
-      cell.dataset.code = code;
-      cell.innerText = code;
+      cell.className = cellClass;
+      cell.textContent = cellText;
+      cell.dataset.hand = cellText;
 
       cell.addEventListener('click', () => {
-        if (selectedRange.has(code)) {
-          selectedRange.delete(code);
+        if (selectedRange.has(cellText)) {
+          selectedRange.delete(cellText);
           cell.classList.remove('selected');
         } else {
-          selectedRange.add(code);
+          selectedRange.add(cellText);
           cell.classList.add('selected');
         }
       });
 
-      grid.appendChild(cell);
+      gridContainer.appendChild(cell);
     }
   }
 }
 
-function selectPreset(presetKey) {
+// 2. Kontrol Preset Range
+function applyPresetRange(percent) {
   selectedRange.clear();
   const cells = document.querySelectorAll('.range-cell');
-
-  if (presetKey === '100') {
-    cells.forEach(cell => {
-      selectedRange.add(cell.dataset.code);
-      cell.classList.add('selected');
-    });
-  } else if (PRESETS[presetKey]) {
-    const targetCodes = new Set(PRESETS[presetKey]);
-    cells.forEach(cell => {
-      if (targetCodes.has(cell.dataset.code)) {
-        selectedRange.add(cell.dataset.code);
-        cell.classList.add('selected');
-      } else {
-        cell.classList.remove('selected');
-      }
-    });
-  }
-
-  ['btn-p5', 'btn-p10', 'btn-p20', 'btn-p50', 'btn-p100'].forEach(id => {
-    document.getElementById(id)?.classList.remove('active');
-  });
   
-  const activeMap = { 'top5': 'btn-p5', 'top10': 'btn-p10', 'top20': 'btn-p20', 'top50': 'btn-p50', '100': 'btn-p100' };
-  document.getElementById(activeMap[presetKey])?.classList.add('active');
+  // Ambil persentase sel berdasarkan urutan rank
+  const totalCells = cells.length; // 169
+  const countToSelect = Math.round((percent / 100) * totalCells);
+
+  cells.forEach((cell, idx) => {
+    if (idx < countToSelect) {
+      selectedRange.add(cell.dataset.hand);
+      cell.classList.add('selected');
+    } else {
+      cell.classList.remove('selected');
+    }
+  });
 }
 
-function generateCardPicker() {
-  const container = document.getElementById('picker-cards-grid');
-  if (!container) return;
-  container.innerHTML = '';
+// 3. Modal Card Picker Visual
+function initCardPicker() {
+  const pickerGrid = document.getElementById('picker-cards-grid');
+  if (!pickerGrid) return;
+  pickerGrid.innerHTML = '';
 
-  SUITS.forEach(suit => {
-    RANKS.forEach(rank => {
-      const cardEl = document.createElement('div');
-      cardEl.className = `card-option ${suit.color}`;
-      cardEl.dataset.text = `${rank}${suit.symbol}`;
-      cardEl.innerHTML = `<span>${rank}</span><span>${suit.symbol}</span>`;
+  const cardRanks = ['A', 'K', 'Q', 'J', '10', '9', '8', '7', '6', '5', '4', '3', '2'];
 
-      cardEl.addEventListener('click', () => selectCardForSlot(rank, suit.symbol));
-      container.appendChild(cardEl);
-    });
-  });
+  for (let suitObj of SUITS) {
+    for (let rank of cardRanks) {
+      const cardDiv = document.createElement('div');
+      cardDiv.className = `card-option ${suitObj.class}`;
+      cardDiv.innerHTML = `<span>${rank}</span><span>${suitObj.symbol}</span>`;
+      cardDiv.dataset.rank = rank;
+      cardDiv.dataset.suit = suitObj.symbol;
+
+      cardDiv.addEventListener('click', () => {
+        selectCardForActiveSlot(rank, suitObj.symbol, suitObj.class);
+      });
+
+      pickerGrid.appendChild(cardDiv);
+    }
+  }
 }
 
 function openPicker(type, index) {
   activeSlot = { type, index };
-  const modal = document.getElementById('card-picker-modal');
-  if (modal) {
-    modal.classList.add('active');
-    updatePickerState();
-  }
+  updatePickerDisabledCards();
+  document.getElementById('card-picker-modal').classList.add('active');
 }
 
 function closePicker() {
-  const modal = document.getElementById('card-picker-modal');
-  if (modal) modal.classList.remove('active');
+  document.getElementById('card-picker-modal').classList.remove('active');
   activeSlot = null;
 }
 
-function updatePickerState() {
-  const usedTexts = new Set();
-  heroHand.forEach(c => c && usedTexts.add(c.text));
-  boardCards.forEach(c => c && usedTexts.add(c.text));
+function updatePickerDisabledCards() {
+  const usedCards = new Set();
+  
+  heroHand.forEach(c => { if (c) usedCards.add(c.text); });
+  boardCards.forEach(c => { if (c) usedCards.add(c.text); });
 
-  document.querySelectorAll('.card-option').forEach(el => {
-    if (usedTexts.has(el.dataset.text)) {
-      el.classList.add('disabled');
+  const options = document.querySelectorAll('.card-option');
+  options.forEach(opt => {
+    const cardText = `${opt.dataset.rank}${opt.dataset.suit}`;
+    if (usedCards.has(cardText)) {
+      opt.classList.add('disabled');
     } else {
-      el.classList.remove('disabled');
+      opt.classList.remove('disabled');
     }
   });
 }
 
-function selectCardForSlot(rank, suitSymbol) {
+function selectCardForActiveSlot(rank, suit, suitClass) {
   if (!activeSlot) return;
-  const suitObj = SUITS.find(s => s.symbol === suitSymbol);
-  const cardObj = { rank, suit: suitSymbol, color: suitObj.color, text: `${rank}${suitSymbol}` };
 
-  if (activeSlot.type === 'hero') heroHand[activeSlot.index] = cardObj;
-  else boardCards[activeSlot.index] = cardObj;
+  const cardData = { rank, suit, suitClass, text: `${rank}${suit}` };
 
-  renderSlots();
+  if (activeSlot.type === 'hero') {
+    heroHand[activeSlot.index] = cardData;
+    renderSlotUI(`hero-${activeSlot.index}`, cardData);
+  } else if (activeSlot.type === 'board') {
+    boardCards[activeSlot.index] = cardData;
+    renderSlotUI(`board-${activeSlot.index}`, cardData);
+  }
+
   closePicker();
 }
 
-function removeCard(type, index) {
-  if (type === 'hero') heroHand[index] = null;
-  else boardCards[index] = null;
-  renderSlots();
-}
+function renderSlotUI(elementId, cardData) {
+  const slotEl = document.getElementById(elementId);
+  if (!slotEl) return;
 
-function renderSlots() {
-  for (let i = 0; i < 2; i++) {
-    const slot = document.getElementById(`hero-${i}`);
-    if (!slot) continue;
-    const card = heroHand[i];
-    if (card) {
-      slot.className = `card-slot filled ${card.color}`;
-      slot.innerHTML = `<span>${card.rank}${card.suit}</span><button class="remove-btn" onclick="event.stopPropagation(); removeCard('hero', ${i})">×</button>`;
-    } else {
-      slot.className = 'card-slot empty';
-      slot.innerHTML = `+ Pilih`;
-    }
-  }
-
-  const names = ['Flop 1', 'Flop 2', 'Flop 3', 'Turn', 'River'];
-  for (let i = 0; i < 5; i++) {
-    const slot = document.getElementById(`board-${i}`);
-    if (!slot) continue;
-    const card = boardCards[i];
-    if (card) {
-      slot.className = `card-slot filled ${card.color}`;
-      slot.innerHTML = `<span>${card.rank}${card.suit}</span><button class="remove-btn" onclick="event.stopPropagation(); removeCard('board', ${i})">×</button>`;
-    } else {
-      slot.className = 'card-slot empty';
-      slot.innerHTML = names[i];
-    }
+  if (cardData) {
+    slotEl.className = `card-slot filled ${cardData.suitClass}`;
+    slotEl.innerHTML = `${cardData.rank}${cardData.suit} <button class="remove-btn" onclick="clearSlot('${elementId}')">&times;</button>`;
+  } else {
+    slotEl.className = 'card-slot empty';
+    slotEl.innerHTML = elementId.startsWith('hero') ? '+ Pilih' : elementId.replace('board-', 'Board ');
   }
 }
 
-function setupEventListeners() {
-  document.getElementById('hero-0')?.addEventListener('click', () => openPicker('hero', 0));
-  document.getElementById('hero-1')?.addEventListener('click', () => openPicker('hero', 1));
-
-  for (let i = 0; i < 5; i++) {
-    document.getElementById(`board-${i}`)?.addEventListener('click', () => openPicker('board', i));
+window.clearSlot = function(elementId) {
+  if (elementId.startsWith('hero')) {
+    const idx = parseInt(elementId.replace('hero-', ''));
+    heroHand[idx] = null;
+  } else if (elementId.startsWith('board')) {
+    const idx = parseInt(elementId.replace('board-', ''));
+    boardCards[idx] = null;
   }
+  renderSlotUI(elementId, null);
+};
 
-  document.getElementById('btn-close-picker')?.addEventListener('click', closePicker);
-  document.getElementById('btn-reset-all')?.addEventListener('click', resetAll);
-  document.getElementById('btn-run-sim')?.addEventListener('click', runSimulation);
-
-  document.getElementById('btn-opp-minus')?.addEventListener('click', () => {
-    if (opponentsCount > 1) { opponentsCount--; updateOpponentUI(); }
-  });
-
-  document.getElementById('btn-opp-plus')?.addEventListener('click', () => {
-    if (opponentsCount < 9) { opponentsCount++; updateOpponentUI(); }
-  });
-
-  document.getElementById('btn-p5')?.addEventListener('click', () => selectPreset('top5'));
-  document.getElementById('btn-p10')?.addEventListener('click', () => selectPreset('top10'));
-  document.getElementById('btn-p20')?.addEventListener('click', () => selectPreset('top20'));
-  document.getElementById('btn-p50')?.addEventListener('click', () => selectPreset('top50'));
-  document.getElementById('btn-p100')?.addEventListener('click', () => selectPreset('100'));
-}
-
-function updateOpponentUI() {
-  const lbl = document.getElementById('opp-count');
-  if (lbl) lbl.innerText = `${opponentsCount} Lawan (${opponentsCount + 1} Max Table)`;
-}
-
-function resetAll() {
-  heroHand = [null, null];
-  boardCards = [null, null, null, null, null];
-  renderSlots();
-  document.getElementById('hero-equity').innerText = '0.0%';
-  document.getElementById('tie-equity').innerText = '0.0%';
-  document.getElementById('villain-equity').innerText = '0.0%';
-  document.getElementById('possible-combos-box').innerHTML = '';
-  document.getElementById('villain-combos-box').innerHTML = '';
-}
-
+// 4. Simulasi Monte Carlo lewat Web Worker
 function runSimulation() {
+  // Validasi Kartu Hero
   if (!heroHand[0] || !heroHand[1]) {
-    alert('Harap pilih 2 kartu kamu (Hero) terlebih dahulu!');
+    alert('Silakan pilih 2 kartu Hero terlebih dahulu!');
     return;
   }
 
   const validBoard = boardCards.filter(c => c !== null);
-  const selectedRangeArray = Array.from(selectedRange);
 
-  document.getElementById('hero-equity').innerText = '...';
-  document.getElementById('villain-equity').innerText = '...';
+  const btnCalc = document.getElementById('btn-run-sim');
+  btnCalc.textContent = 'MENGHITUNG...';
+  btnCalc.disabled = true;
 
-  if (simulationWorker) simulationWorker.terminate();
-
-  simulationWorker = new Worker('worker.js');
-  simulationWorker.postMessage({
+  const worker = new Worker('worker.js');
+  
+  worker.postMessage({
     heroHand: heroHand,
     board: validBoard,
     opponents: opponentsCount,
-    selectedRange: selectedRangeArray,
-    simulations: 5000
+    selectedRange: Array.from(selectedRange),
+    simulations: 10000
   });
 
-  simulationWorker.onmessage = function (e) {
-    const { heroEquity, villainEquity, tieEquity, heroCombos, villainCombos } = e.data;
-    document.getElementById('hero-equity').innerText = `${heroEquity}%`;
-    document.getElementById('villain-equity').innerText = `${villainEquity}%`;
-    document.getElementById('tie-equity').innerText = `${tieEquity}%`;
+  worker.onmessage = function (e) {
+    const { heroEquity, tieEquity, villainEquity, heroCombos, villainCombos } = e.data;
+
+    document.getElementById('hero-equity').textContent = `${heroEquity}%`;
+    document.getElementById('tie-equity').textContent = `${tieEquity}%`;
+    document.getElementById('villain-equity').textContent = `${villainEquity}%`;
 
     renderHeroCombos(heroCombos);
     renderVillainPossibleCards(villainCombos);
+
+    btnCalc.textContent = 'HITUNG SIMULASI MONTE CARLO';
+    btnCalc.disabled = false;
+    worker.terminate();
   };
 }
 
-function renderHeroCombos(hCombos) {
+function renderHeroCombos(combos) {
   const container = document.getElementById('possible-combos-box');
-  if (!container || !hCombos) return;
+  if (!container || !combos) return;
+
   let html = '<div class="section-title">KATEGORI HAND KAMU</div><div class="combo-stats-grid">';
-  for (let key in hCombos) {
-    if (parseFloat(hCombos[key]) > 0) {
-      html += `<div class="combo-stat-item hero"><span>${key}</span><strong>${hCombos[key]}%</strong></div>`;
+  for (let key in combos) {
+    if (parseFloat(combos[key]) > 0) {
+      html += `<div class="combo-stat-item">
+        <span>${key}</span>
+        <strong>${combos[key]}%</strong>
+      </div>`;
     }
   }
   html += '</div>';
   container.innerHTML = html;
 }
 
+// Menampilkan Kategori + Kartu Lawan yang Mengalahkan
 function renderVillainPossibleCards(vCombos) {
   const container = document.getElementById('villain-combos-box');
   if (!container || !vCombos) return;
+
   let html = '<div class="section-title">KARTU LAWAN YANG MENGALAHKANMU</div><div class="combo-stats-grid">';
   for (let key in vCombos) {
     if (parseFloat(vCombos[key]) > 0) {
-      html += `<div class="combo-stat-item villain"><span>${key}</span><strong style="color:var(--red, #ef4444);">${vCombos[key]}%</strong></div>`;
+      let parts = key.split('|');
+      let category = parts[0] || '';
+      let cards = parts[1] || key;
+
+      html += `<div class="combo-stat-item villain" style="flex-direction:column; align-items:flex-start; gap:2px;">
+        <div style="display:flex; justify-content:space-between; width:100%;">
+          <span style="font-weight:bold; color:var(--text-main);">${category}</span>
+          <strong style="color:var(--red, #ef4444);">${vCombos[key]}%</strong>
+        </div>
+        <span style="font-size:0.7rem; color:var(--text-sub);">${cards}</span>
+      </div>`;
     }
   }
   html += '</div>';
   container.innerHTML = html;
 }
+
+// 5. Event Listeners & Inisialisasi Utama
+document.addEventListener('DOMContentLoaded', () => {
+  initRangeGrid();
+  initCardPicker();
+  applyPresetRange(100); // Default 100%
+
+  // Slot Hand Click
+  document.getElementById('hero-0').addEventListener('click', (e) => {
+    if (e.target.tagName !== 'BUTTON') openPicker('hero', 0);
+  });
+  document.getElementById('hero-1').addEventListener('click', (e) => {
+    if (e.target.tagName !== 'BUTTON') openPicker('hero', 1);
+  });
+
+  // Slot Board Click
+  for (let i = 0; i < 5; i++) {
+    document.getElementById(`board-${i}`).addEventListener('click', (e) => {
+      if (e.target.tagName !== 'BUTTON') openPicker('board', i);
+    });
+  }
+
+  // Tombol Tutup Picker
+  document.getElementById('btn-close-picker').addEventListener('click', closePicker);
+
+  // Selector Opponents
+  document.getElementById('btn-opp-minus').addEventListener('click', () => {
+    if (opponentsCount > 1) {
+      opponentsCount--;
+      document.getElementById('opp-count').textContent = `${opponentsCount} Lawan (${opponentsCount + 1} Max Table)`;
+    }
+  });
+
+  document.getElementById('btn-opp-plus').addEventListener('click', () => {
+    if (opponentsCount < 9) {
+      opponentsCount++;
+      document.getElementById('opp-count').textContent = `${opponentsCount} Lawan (${opponentsCount + 1} Max Table)`;
+    }
+  });
+
+  // Preset Buttons
+  const presets = [
+    { id: 'btn-p5', pct: 5 },
+    { id: 'btn-p10', pct: 10 },
+    { id: 'btn-p20', pct: 20 },
+    { id: 'btn-p50', pct: 50 },
+    { id: 'btn-p100', pct: 100 }
+  ];
+
+  presets.forEach(p => {
+    document.getElementById(p.id).addEventListener('click', (e) => {
+      document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
+      e.target.classList.add('active');
+      applyPresetRange(p.pct);
+    });
+  });
+
+  // Run Simulation
+  document.getElementById('btn-run-sim').addEventListener('click', runSimulation);
+
+  // Reset All
+  document.getElementById('btn-reset-all').addEventListener('click', () => {
+    heroHand = [null, null];
+    boardCards = [null, null, null, null, null];
+    for (let i = 0; i < 2; i++) renderSlotUI(`hero-${i}`, null);
+    for (let i = 0; i < 5; i++) renderSlotUI(`board-${i}`, null);
+    document.getElementById('hero-equity').textContent = '0.0%';
+    document.getElementById('tie-equity').textContent = '0.0%';
+    document.getElementById('villain-equity').textContent = '0.0%';
+    document.getElementById('possible-combos-box').innerHTML = '';
+    document.getElementById('villain-combos-box').innerHTML = '';
+  });
+});
