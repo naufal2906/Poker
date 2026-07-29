@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pro Poker Engine</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app">
+    <h2>PRO POKER ENGINE</h2>
+
+    <!-- Mode Selector -->
+    <div class="mode-selector">
+      <button class="mode-btn active" id="btn-hvr">Hand vs Range</button>
+    </div>
+
+    <!-- Jumlah Lawan Selector -->
+    <div class="opponents-selector">
+      <span class="section-title" style="margin:0;">JUMLAH LAWAN DI MEJA</span>
+      <div style="display:flex; align-items:center; gap:12px;">
+        <button class="opp-btn" id="btn-opp-minus">-</button>
+        <span id="opp-count" style="font-weight:bold; font-size:14px;">8 Lawan (9 Max Table)</span>
+        <button class="opp-btn" id="btn-opp-plus">+</button>
+      </div>
+    </div>
+
+    <!-- Hero Hand -->
+    <div class="section-title">KARTU KAMU (HERO)</div>
+    <div class="card-group">
+      <div class="card-slot empty" id="hero-0">+ Pilih</div>
+      <div class="card-slot empty" id="hero-1">+ Pilih</div>
+    </div>
+
+    <!-- Preset Range Lawan -->
+    <div class="section-title" style="margin-top:15px;">PRESET RANGE LAWAN</div>
+    <div class="preset-buttons">
+      <button class="preset-btn" id="btn-p5">Top 5%</button>
+      <button class="preset-btn" id="btn-p10">Top 10%</button>
+      <button class="preset-btn" id="btn-p20">Top 20%</button>
+      <button class="preset-btn" id="btn-p50">Top 50%</button>
+      <button class="preset-btn active" id="btn-p100">100% (Semua)</button>
+    </div>
+
+    <!-- Matrix Range Grid -->
+    <div id="range-grid" class="range-grid"></div>
+
+    <!-- Kartu Komunitas (Board) -->
+    <div class="section-title" style="margin-top:15px;">KARTU KOMUNITAS (BOARD)</div>
+    <div class="card-group">
+      <div class="card-slot empty" id="board-0">Flop 1</div>
+      <div class="card-slot empty" id="board-1">Flop 2</div>
+      <div class="card-slot empty" id="board-2">Flop 3</div>
+      <div class="card-slot empty" id="board-3">Turn</div>
+      <div class="card-slot empty" id="board-4">River</div>
+    </div>
+
+    <!-- Result / Status Bar -->
+    <div class="equity-box">
+      <div class="equity-item">
+        <span>Menang Kamu</span>
+        <strong id="hero-equity" style="color:var(--green, #10b981);">0.0%</strong>
+      </div>
+      <div class="equity-item">
+        <span>Seri / Split</span>
+        <strong id="tie-equity" style="color:var(--yellow, #f59e0b);">0.0%</strong>
+      </div>
+      <div class="equity-item">
+        <span>Menang Lawan</span>
+        <strong id="villain-equity" style="color:var(--red, #ef4444);">0.0%</strong>
+      </div>
+    </div>
+
+    <!-- Action Buttons -->
+    <button class="btn-calc" id="btn-run-sim">HITUNG SIMULASI MONTE CARLO</button>
+    <button class="btn-reset" id="btn-reset-all">Reset Semua Kartu</button>
+
+    <!-- Analysis Outputs -->
+    <div id="possible-combos-box" style="margin-top:15px;"></div>
+    <div id="villain-combos-box" style="margin-top:15px;"></div>
+  </div>
+
+  <!-- Modal Card Picker Visual -->
+  <div class="picker-overlay" id="card-picker-modal">
+    <div class="picker-box">
+      <div class="section-title">PILIH KARTU</div>
+      <div id="picker-cards-grid" class="picker-grid"></div>
+      <button class="btn-reset" id="btn-close-picker" style="margin-top:15px; width:100%;">Tutup</button>
+    </div>
+  </div>
+
+  <!-- Panggil evaluator.js lebih dulu baru app.js -->
+  <script src="evaluator.js"></script>
+  <script src="app.js?v=final_fix_100"></script>
+</body>
+</html>
