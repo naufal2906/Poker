@@ -34,13 +34,13 @@ self.onmessage = function (e) {
   for (let i = 0; i < simulations; i++) {
     let currentDeck = [...availableDeck];
 
-    // Shuffle Deck
+    // Acak Deck
     for (let j = currentDeck.length - 1; j > 0; j--) {
       const k = Math.floor(Math.random() * (j + 1));
       [currentDeck[j], currentDeck[k]] = [currentDeck[k], currentDeck[j]];
     }
 
-    // Fill Board
+    // Lengkapi Board jika belum 5 kartu
     let simBoard = [...board];
     while (simBoard.length < 5) {
       simBoard.push(currentDeck.pop());
@@ -60,8 +60,13 @@ self.onmessage = function (e) {
       let vEval = self.PokerEvaluator.evaluateHand([v1, v2, ...simBoard]);
       if (!maxVillainScore || vEval.rankScore > maxVillainScore) {
         maxVillainScore = vEval.rankScore;
-        // Gabungkan Kategori + Kartu Lawan
-        winningVillainInfo = `${vEval.category}|${v1.rank}${v1.suit} ${v2.rank}${v2.suit}`;
+        // Simpan Kategori, Skor Kekuatan, dan Pasangan Kartu Lawan
+        winningVillainInfo = {
+          category: vEval.category,
+          score: vEval.rankScore,
+          cards: `${v1.rank}${v1.suit} ${v2.rank}${v2.suit}`,
+          key: `${vEval.category}|${v1.rank}${v1.suit} ${v2.rank}${v2.suit}`
+        };
       }
     }
 
@@ -72,7 +77,13 @@ self.onmessage = function (e) {
     } else {
       losses++;
       if (winningVillainInfo) {
-        villainWinsCards[winningVillainInfo] = (villainWinsCards[winningVillainInfo] || 0) + 1;
+        if (!villainWinsCards[winningVillainInfo.key]) {
+          villainWinsCards[winningVillainInfo.key] = {
+            count: 0,
+            score: winningVillainInfo.score
+          };
+        }
+        villainWinsCards[winningVillainInfo.key].count++;
       }
     }
   }
@@ -83,12 +94,18 @@ self.onmessage = function (e) {
   }
 
   let villainCombosResult = {};
-  let sortedVillain = Object.keys(villainWinsCards)
-    .sort((a, b) => villainWinsCards[b] - villainWinsCards[a])
-    .slice(0, 8);
+  
+  // Urutkan lawan menang berdasarkan:
+  // 1. Frekuensi terbanyak (count)
+  // 2. Jika count sama, prioritaskan kombinasi kartu yang lebih kuat (score)
+  let sortedVillainKeys = Object.keys(villainWinsCards).sort((a, b) => {
+    let diff = villainWinsCards[b].count - villainWinsCards[a].count;
+    if (diff !== 0) return diff;
+    return villainWinsCards[b].score - villainWinsCards[a].score;
+  }).slice(0, 8);
 
-  sortedVillain.forEach(k => {
-    villainCombosResult[k] = ((villainWinsCards[k] / simulations) * 100).toFixed(1);
+  sortedVillainKeys.forEach(k => {
+    villainCombosResult[k] = ((villainWinsCards[k].count / simulations) * 100).toFixed(1);
   });
 
   self.postMessage({
