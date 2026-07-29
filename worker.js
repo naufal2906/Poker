@@ -50,7 +50,7 @@ self.onmessage = function (e) {
     heroComboCounts[heroEval.category] = (heroComboCounts[heroEval.category] || 0) + 1;
 
     let maxVillainScore = null;
-    let winningVillainHand = null;
+    let winningVillainInfo = null;
 
     for (let opp = 0; opp < opponents; opp++) {
       if (currentDeck.length < 2) break;
@@ -60,7 +60,8 @@ self.onmessage = function (e) {
       let vEval = self.PokerEvaluator.evaluateHand([v1, v2, ...simBoard]);
       if (!maxVillainScore || vEval.rankScore > maxVillainScore) {
         maxVillainScore = vEval.rankScore;
-        winningVillainHand = `${v1.rank}${v1.suit} ${v2.rank}${v2.suit}`;
+        // Gabungkan Kategori + Kartu Lawan
+        winningVillainInfo = `${vEval.category}|${v1.rank}${v1.suit} ${v2.rank}${v2.suit}`;
       }
     }
 
@@ -70,8 +71,8 @@ self.onmessage = function (e) {
       ties++;
     } else {
       losses++;
-      if (winningVillainHand) {
-        villainWinsCards[winningVillainHand] = (villainWinsCards[winningVillainHand] || 0) + 1;
+      if (winningVillainInfo) {
+        villainWinsCards[winningVillainInfo] = (villainWinsCards[winningVillainInfo] || 0) + 1;
       }
     }
   }
