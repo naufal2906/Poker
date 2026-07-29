@@ -225,7 +225,7 @@ function renderHeroCombos(combos) {
   container.innerHTML = html;
 }
 
-// Menampilkan Kategori + Kartu Lawan yang Mengalahkan
+// Menampilkan Kategori + Kartu Lawan yang Mengalahkan (UI Rapi)
 function renderVillainPossibleCards(vCombos) {
   const container = document.getElementById('villain-combos-box');
   if (!container || !vCombos) return;
@@ -234,13 +234,13 @@ function renderVillainPossibleCards(vCombos) {
   for (let key in vCombos) {
     if (parseFloat(vCombos[key]) > 0) {
       let parts = key.split('|');
-      let category = parts[0] || '';
-      let cards = parts[1] || key;
+      let category = parts[0] ? parts[0].trim() : 'Combo';
+      let cards = parts[1] ? parts[1].trim() : key;
 
-      html += `<div class="combo-stat-item villain" style="flex-direction:column; align-items:flex-start; gap:2px;">
+      html += `<div class="combo-stat-item villain" style="flex-direction:column; align-items:flex-start; gap:2px; padding: 8px;">
         <div style="display:flex; justify-content:space-between; width:100%;">
-          <span style="font-weight:bold; color:var(--text-main);">${category}</span>
-          <strong style="color:var(--red, #ef4444);">${vCombos[key]}%</strong>
+          <span style="font-weight:bold; color:var(--text-main); font-size:0.75rem;">${category}</span>
+          <strong style="color:var(--red, #ef4444); font-size:0.75rem;">${vCombos[key]}%</strong>
         </div>
         <span style="font-size:0.7rem; color:var(--text-sub);">${cards}</span>
       </div>`;
