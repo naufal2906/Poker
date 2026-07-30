@@ -40,12 +40,13 @@ self.onmessage = function (e) {
       [currentDeck[j], currentDeck[k]] = [currentDeck[k], currentDeck[j]];
     }
 
-    // Lengkapi Board jika belum 5 kartu
+    // Lengkapi Board sampai 5 kartu
     let simBoard = [...board];
     while (simBoard.length < 5) {
       simBoard.push(currentDeck.pop());
     }
 
+    // Evaluasi Hand Hero
     let heroEval = self.PokerEvaluator.evaluateHand([...heroHand, ...simBoard]);
     heroComboCounts[heroEval.category] = (heroComboCounts[heroEval.category] || 0) + 1;
 
@@ -60,11 +61,9 @@ self.onmessage = function (e) {
       let vEval = self.PokerEvaluator.evaluateHand([v1, v2, ...simBoard]);
       if (!maxVillainScore || vEval.rankScore > maxVillainScore) {
         maxVillainScore = vEval.rankScore;
-        // Simpan Kategori, Skor Kekuatan, dan Pasangan Kartu Lawan
         winningVillainInfo = {
           category: vEval.category,
           score: vEval.rankScore,
-          cards: `${v1.rank}${v1.suit} ${v2.rank}${v2.suit}`,
           key: `${vEval.category}|${v1.rank}${v1.suit} ${v2.rank}${v2.suit}`
         };
       }
@@ -88,16 +87,26 @@ self.onmessage = function (e) {
     }
   }
 
+  // Hirarki Kategori Poker untuk Pengurutan Hasil Hero
+  const CATEGORY_ORDER = [
+    'Royal Flush', 'Straight Flush', 'Four of a Kind', 'Full House',
+    'Flush', 'Straight', 'Three of a Kind', 'Two Pair', 'One Pair', 'High Card'
+  ];
+
   let heroCombosResult = {};
-  for (let key in heroComboCounts) {
-    heroCombosResult[key] = ((heroComboCounts[key] / simulations) * 100).toFixed(1);
-  }
+  
+  // Urutkan kombinasi Hero berdasarkan kekuatan kategori (bukan sekadar persentase)
+  CATEGORY_ORDER.forEach(cat => {
+    if (heroComboCounts[cat]) {
+      let pct = ((heroComboCounts[cat] / simulations) * 100).toFixed(1);
+      // Tampilkan kombinasi jika bernilai > 0.5% agar tampilan tetap ringkas dan relevan
+      if (parseFloat(pct) >= 0.5) {
+        heroCombosResult[cat] = pct;
+      }
+    }
+  });
 
   let villainCombosResult = {};
-  
-  // Urutkan lawan menang berdasarkan:
-  // 1. Frekuensi terbanyak (count)
-  // 2. Jika count sama, prioritaskan kombinasi kartu yang lebih kuat (score)
   let sortedVillainKeys = Object.keys(villainWinsCards).sort((a, b) => {
     let diff = villainWinsCards[b].count - villainWinsCards[a].count;
     if (diff !== 0) return diff;
