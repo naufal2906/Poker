@@ -1,11 +1,10 @@
 // State Aplikasi
 let opponentsCount = 8;
-let heroHand = [null, null]; // [slot0, slot1]
-let boardCards = [null, null, null, null, null]; // [flop1, flop2, flop3, turn, river]
-let selectedRange = new Set(); // Menyimpan hand dari matriks (contoh: 'AA', 'AKs')
-let activeSlot = null; // Menyimpan slot mana yang sedang diisi kartu ({type: 'hero'|'board', index: number})
+let heroHand = [null, null];
+let boardCards = [null, null, null, null, null];
+let selectedRange = new Set();
+let activeSlot = null;
 
-// Evaluator Data untuk Matriks 13x13
 const RANKS = ['A', 'K', 'Q', 'J', 'T', '9', '8', '7', '6', '5', '4', '3', '2'];
 const SUITS = [
   { symbol: '♠', class: 'black' },
@@ -14,7 +13,20 @@ const SUITS = [
   { symbol: '♣', class: 'black' }
 ];
 
-// 1. Inisialisasi Matriks 13x13 Range
+// Daftar Hand GTO Preflop Standard
+const GTO_RAISE = new Set([
+  'AA','KK','QQ','JJ','TT','99',
+  'AKs','AQs','AJs','ATs','A9s','A8s','A7s','A6s','A5s','A4s','A3s','A2s',
+  'AKo','AQo','KQs','KJs','KTs','K9s','QJs','QTs','JTs','T9s','98s','87s','76s','65s','54s'
+]);
+
+const GTO_CALL = new Set([
+  '88','77','66','55','44','33','22',
+  'K8s','K7s','K6s','K5s','Q9s','Q8s','J9s','J8s','T8s','97s','86s','75s','64s','53s',
+  'AJo','ATo','KQo','KJo','QJo','JTo'
+]);
+
+// 1. Inisialisasi Matriks GTO Color
 function initRangeGrid() {
   const gridContainer = document.getElementById('range-grid');
   if (!gridContainer) return;
@@ -23,59 +35,89 @@ function initRangeGrid() {
   for (let i = 0; i < 13; i++) {
     for (let j = 0; j < 13; j++) {
       let cellText = '';
-      let cellClass = 'range-cell';
-
       if (i === j) {
         cellText = RANKS[i] + RANKS[j];
-        cellClass += ' pair';
       } else if (i < j) {
         cellText = RANKS[i] + RANKS[j] + 's';
-        cellClass += ' suited';
       } else {
         cellText = RANKS[j] + RANKS[i] + 'o';
-        cellClass += ' offsuit';
+      }
+
+      let cellClass = 'range-cell';
+      if (GTO_RAISE.has(cellText)) {
+        cellClass += ' gto-raise';
+      } else if (GTO_CALL.has(cellText)) {
+        cellClass += ' gto-call';
+      } else {
+        cellClass += ' gto-fold';
       }
 
       const cell = document.createElement('div');
       cell.className = cellClass;
       cell.textContent = cellText;
       cell.dataset.hand = cellText;
+      cell.id = `cell-${cellText}`;
 
       cell.addEventListener('click', () => {
         if (selectedRange.has(cellText)) {
           selectedRange.delete(cellText);
-          cell.classList.remove('selected');
+          cell.style.opacity = '0.3';
         } else {
           selectedRange.add(cellText);
-          cell.classList.add('selected');
+          cell.style.opacity = '1';
         }
       });
 
+      selectedRange.add(cellText);
       gridContainer.appendChild(cell);
     }
   }
 }
 
-// 2. Kontrol Preset Range
+// Sorot Hand Hero di dalam Matriks
+function updateHeroHandHighlight() {
+  document.querySelectorAll('.range-cell').forEach(c => c.classList.remove('hero-highlight'));
+
+  if (heroHand[0] && heroHand[1]) {
+    let r1 = heroHand[0].rank === '10' ? 'T' : heroHand[0].rank;
+    let r2 = heroHand[1].rank === '10' ? 'T' : heroHand[1].rank;
+    let s1 = heroHand[0].suit;
+    let s2 = heroHand[1].suit;
+
+    let idx1 = RANKS.indexOf(r1);
+    let idx2 = RANKS.indexOf(r2);
+
+    let handKey = '';
+    if (idx1 === idx2) {
+      handKey = r1 + r2;
+    } else if (idx1 < idx2) {
+      handKey = (s1 === s2) ? (r1 + r2 + 's') : (r1 + r2 + 'o');
+    } else {
+      handKey = (s1 === s2) ? (r2 + r1 + 's') : (r2 + r1 + 'o');
+    }
+
+    const targetCell = document.getElementById(`cell-${handKey}`);
+    if (targetCell) {
+      targetCell.classList.add('hero-highlight');
+    }
+  }
+}
+
 function applyPresetRange(percent) {
   selectedRange.clear();
   const cells = document.querySelectorAll('.range-cell');
-  
-  // Ambil persentase sel berdasarkan urutan rank
-  const totalCells = cells.length; // 169
-  const countToSelect = Math.round((percent / 100) * totalCells);
+  const countToSelect = Math.round((percent / 100) * cells.length);
 
   cells.forEach((cell, idx) => {
     if (idx < countToSelect) {
       selectedRange.add(cell.dataset.hand);
-      cell.classList.add('selected');
+      cell.style.opacity = '1';
     } else {
-      cell.classList.remove('selected');
+      cell.style.opacity = '0.3';
     }
   });
 }
 
-// 3. Modal Card Picker Visual
 function initCardPicker() {
   const pickerGrid = document.getElementById('picker-cards-grid');
   if (!pickerGrid) return;
@@ -113,7 +155,6 @@ function closePicker() {
 
 function updatePickerDisabledCards() {
   const usedCards = new Set();
-  
   heroHand.forEach(c => { if (c) usedCards.add(c.text); });
   boardCards.forEach(c => { if (c) usedCards.add(c.text); });
 
@@ -136,6 +177,7 @@ function selectCardForActiveSlot(rank, suit, suitClass) {
   if (activeSlot.type === 'hero') {
     heroHand[activeSlot.index] = cardData;
     renderSlotUI(`hero-${activeSlot.index}`, cardData);
+    updateHeroHandHighlight();
   } else if (activeSlot.type === 'board') {
     boardCards[activeSlot.index] = cardData;
     renderSlotUI(`board-${activeSlot.index}`, cardData);
@@ -161,6 +203,7 @@ window.clearSlot = function(elementId) {
   if (elementId.startsWith('hero')) {
     const idx = parseInt(elementId.replace('hero-', ''));
     heroHand[idx] = null;
+    updateHeroHandHighlight();
   } else if (elementId.startsWith('board')) {
     const idx = parseInt(elementId.replace('board-', ''));
     boardCards[idx] = null;
@@ -168,16 +211,13 @@ window.clearSlot = function(elementId) {
   renderSlotUI(elementId, null);
 };
 
-// 4. Simulasi Monte Carlo lewat Web Worker
 function runSimulation() {
-  // Validasi Kartu Hero
   if (!heroHand[0] || !heroHand[1]) {
     alert('Silakan pilih 2 kartu Hero terlebih dahulu!');
     return;
   }
 
   const validBoard = boardCards.filter(c => c !== null);
-
   const btnCalc = document.getElementById('btn-run-sim');
   btnCalc.textContent = 'MENGHITUNG...';
   btnCalc.disabled = true;
@@ -225,7 +265,6 @@ function renderHeroCombos(combos) {
   container.innerHTML = html;
 }
 
-// Menampilkan Kategori + Kartu Lawan yang Mengalahkan (UI Rapi)
 function renderVillainPossibleCards(vCombos) {
   const container = document.getElementById('villain-combos-box');
   if (!container || !vCombos) return;
@@ -250,13 +289,10 @@ function renderVillainPossibleCards(vCombos) {
   container.innerHTML = html;
 }
 
-// 5. Event Listeners & Inisialisasi Utama
 document.addEventListener('DOMContentLoaded', () => {
   initRangeGrid();
   initCardPicker();
-  applyPresetRange(100); // Default 100%
 
-  // Slot Hand Click
   document.getElementById('hero-0').addEventListener('click', (e) => {
     if (e.target.tagName !== 'BUTTON') openPicker('hero', 0);
   });
@@ -264,17 +300,14 @@ document.addEventListener('DOMContentLoaded', () => {
     if (e.target.tagName !== 'BUTTON') openPicker('hero', 1);
   });
 
-  // Slot Board Click
   for (let i = 0; i < 5; i++) {
     document.getElementById(`board-${i}`).addEventListener('click', (e) => {
       if (e.target.tagName !== 'BUTTON') openPicker('board', i);
     });
   }
 
-  // Tombol Tutup Picker
   document.getElementById('btn-close-picker').addEventListener('click', closePicker);
 
-  // Selector Opponents
   document.getElementById('btn-opp-minus').addEventListener('click', () => {
     if (opponentsCount > 1) {
       opponentsCount--;
@@ -289,7 +322,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // Preset Buttons
   const presets = [
     { id: 'btn-p5', pct: 5 },
     { id: 'btn-p10', pct: 10 },
@@ -306,15 +338,14 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  // Run Simulation
   document.getElementById('btn-run-sim').addEventListener('click', runSimulation);
 
-  // Reset All
   document.getElementById('btn-reset-all').addEventListener('click', () => {
     heroHand = [null, null];
     boardCards = [null, null, null, null, null];
     for (let i = 0; i < 2; i++) renderSlotUI(`hero-${i}`, null);
     for (let i = 0; i < 5; i++) renderSlotUI(`board-${i}`, null);
+    updateHeroHandHighlight();
     document.getElementById('hero-equity').textContent = '0.0%';
     document.getElementById('tie-equity').textContent = '0.0%';
     document.getElementById('villain-equity').textContent = '0.0%';
